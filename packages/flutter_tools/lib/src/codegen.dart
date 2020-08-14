@@ -3,8 +3,13 @@
 // found in the LICENSE file.
 
 import 'package:meta/meta.dart';
+import 'package:package_config/package_config.dart';
+import 'package:process/process.dart';
 
+import 'artifacts.dart';
 import 'base/context.dart';
+import 'base/file_system.dart';
+import 'base/logger.dart';
 import 'build_info.dart';
 import 'compile.dart';
 import 'globals.dart' as globals;
@@ -62,17 +67,25 @@ abstract class CodegenDaemon {
 /// supported here. Using the build pipeline implies a fixed multi-root
 /// filesystem and requires a pubspec.
 class CodeGeneratingKernelCompiler implements KernelCompiler {
-  const CodeGeneratingKernelCompiler();
+  CodeGeneratingKernelCompiler({
+    @required FileSystem fileSystem,
+    @required Artifacts artifacts,
+    @required ProcessManager processManager,
+    @required Logger logger,
+  }) : _delegate = KernelCompiler(
+    logger: logger,
+    artifacts: artifacts,
+    processManager: processManager,
+    fileSystem: fileSystem,
+  );
 
-  static const KernelCompiler _delegate = KernelCompiler();
-
+  final KernelCompiler _delegate;
   @override
   Future<CompilerOutput> compile({
     String mainPath,
     String outputFilePath,
     bool linkPlatformKernelIn = false,
     bool aot = false,
-    @required BuildMode buildMode,
     bool trackWidgetCreation,
     List<String> extraFrontEndOptions,
     String sdkRoot,
@@ -84,6 +97,8 @@ class CodeGeneratingKernelCompiler implements KernelCompiler {
     String initializeFromDill,
     String platformDill,
     List<String> dartDefines,
+    @required BuildMode buildMode,
+    @required PackageConfig packageConfig,
   }) async {
     final FlutterProject flutterProject = FlutterProject.current();
     final CodegenDaemon codegenDaemon = await codeGenerator.daemon(flutterProject);
@@ -113,6 +128,7 @@ class CodeGeneratingKernelCompiler implements KernelCompiler {
       targetModel: targetModel,
       initializeFromDill: initializeFromDill,
       dartDefines: dartDefines,
+      packageConfig: packageConfig,
     );
   }
 }
@@ -136,6 +152,14 @@ class CodeGeneratingResidentCompiler implements ResidentCompiler {
     if (runCold) {
       return residentCompiler;
     }
+    globals.printError(<String>[
+      '"flutter generate" is deprecated, use "dart pub run build_runner" instead. ',
+      'The following dependencies must be added to dev_dependencies in pubspec.yaml:',
+      'build_runner: 1.10.0',
+      for (Object dependency in flutterProject.builders?.keys ?? const <Object>[])
+        '$dependency: ${flutterProject.builders[dependency]}'
+    ].join('\n'));
+
     final CodegenDaemon codegenDaemon = await codeGenerator.daemon(flutterProject);
     codegenDaemon.startBuild();
     final CodegenStatus status = await codegenDaemon.buildResults.firstWhere((CodegenStatus status) {
@@ -170,7 +194,13 @@ class CodeGeneratingResidentCompiler implements ResidentCompiler {
   }
 
   @override
-  Future<CompilerOutput> recompile(String mainPath, List<Uri> invalidatedFiles, {String outputPath, String packagesFilePath}) async {
+  Future<CompilerOutput> recompile(
+    Uri mainUri,
+    List<Uri> invalidatedFiles, {
+      String outputPath,
+      PackageConfig packageConfig,
+      bool suppressErrors = false,
+    }) async {
     if (_codegenDaemon.lastStatus != CodegenStatus.Succeeded && _codegenDaemon.lastStatus != CodegenStatus.Failed) {
       await _codegenDaemon.buildResults.firstWhere((CodegenStatus status) {
         return status == CodegenStatus.Succeeded || status == CodegenStatus.Failed;
@@ -180,10 +210,11 @@ class CodeGeneratingResidentCompiler implements ResidentCompiler {
       globals.printError('Code generation failed, build may have compile errors.');
     }
     return _residentCompiler.recompile(
-      mainPath,
+      mainUri,
       invalidatedFiles,
       outputPath: outputPath,
-      packagesFilePath: packagesFilePath,
+      packageConfig: packageConfig,
+      suppressErrors: suppressErrors,
     );
   }
 

@@ -89,6 +89,9 @@ typedef WidgetTesterCallback = Future<void> Function(WidgetTester widgetTester);
 /// each value of the [TestVariant.values]. If [variant] is not set, the test
 /// will be run once using the base test environment.
 ///
+/// If the [tags] are passed, they declare user-defined tags that are implemented by
+/// the `test` package.
+///
 /// See also:
 ///
 ///  * [AutomatedTestWidgetsFlutterBinding.addTime] to learn more about
@@ -112,6 +115,7 @@ void testWidgets(
   Duration initialTimeout,
   bool semanticsEnabled = true,
   TestVariant<Object> variant = const DefaultTestVariant(),
+  dynamic tags,
 }) {
   assert(variant != null);
   assert(variant.values.isNotEmpty, 'There must be at least on value to test in the testing variant');
@@ -150,6 +154,7 @@ void testWidgets(
       },
       skip: skip,
       timeout: timeout ?? binding.defaultTestTimeout,
+      tags: tags,
     );
   }
 }
@@ -224,6 +229,22 @@ class TargetPlatformVariant extends TestVariant<TargetPlatform> {
   /// Creates a [TargetPlatformVariant] that tests all values from
   /// the [TargetPlatform] enum.
   TargetPlatformVariant.all() : values = TargetPlatform.values.toSet();
+
+  /// Creates a [TargetPlatformVariant] that includes platforms that are
+  /// considered desktop platforms.
+  TargetPlatformVariant.desktop() : values = <TargetPlatform>{
+    TargetPlatform.linux,
+    TargetPlatform.macOS,
+    TargetPlatform.windows,
+  };
+
+  /// Creates a [TargetPlatformVariant] that includes platforms that are
+  /// considered mobile platforms.
+  TargetPlatformVariant.mobile() : values = <TargetPlatform>{
+    TargetPlatform.android,
+    TargetPlatform.iOS,
+    TargetPlatform.fuchsia,
+  };
 
   /// Creates a [TargetPlatformVariant] that tests only the given value of
   /// [TargetPlatform].
@@ -545,6 +566,29 @@ class WidgetTester extends WidgetController implements HitTestDispatcher, Ticker
     }).then<int>((_) => count);
   }
 
+  /// Repeatedly pump frames that render the `target` widget with a fixed time
+  /// `interval` as many as `maxDuration` allows.
+  ///
+  /// The `maxDuration` argument is required. The `interval` argument defaults to
+  /// 16.683 milliseconds (59.94 FPS).
+  Future<void> pumpFrames(
+    Widget target,
+    Duration maxDuration, [
+    Duration interval = const Duration(milliseconds: 16, microseconds: 683),
+  ]) {
+    assert(maxDuration != null);
+    // The interval following the last frame doesn't have to be within the fullDuration.
+    Duration elapsed = Duration.zero;
+    return TestAsyncUtils.guard<void>(() async {
+      binding.attachRootWidget(target);
+      binding.scheduleFrame();
+      while (elapsed < maxDuration) {
+        await binding.pump(interval);
+        elapsed += interval;
+      }
+    });
+  }
+
   /// Runs a [callback] that performs real asynchronous work.
   ///
   /// This is intended for callers who need to call asynchronous methods where
@@ -559,12 +603,24 @@ class WidgetTester extends WidgetController implements HitTestDispatcher, Ticker
   ///
   /// If [callback] completes with an error, the error will be caught by the
   /// Flutter framework and made available via [takeException], and this method
-  /// will return a future that completes will `null`.
+  /// will return a future that completes with `null`.
   ///
   /// Re-entrant calls to this method are not allowed; callers of this method
   /// are required to wait for the returned future to complete before calling
   /// this method again. Attempts to do otherwise will result in a
   /// [TestFailure] error being thrown.
+  ///
+  /// If your widget test hangs and you are using [runAsync], chances are your
+  /// code depends on the result of a task that did not complete. Fake async
+  /// environment is unable to resolve a future that was created in [runAsync].
+  /// If you observe such behavior or flakiness, you have a number of options:
+  ///
+  /// * Consider restructuring your code so you do not need [runAsync]. This is
+  ///   the optimal solution as widget tests are designed to run in fake async
+  ///   environment.
+  ///
+  /// * Expose a [Future] in your application code that signals the readiness of
+  ///   your widget tree, then await that future inside [callback].
   Future<T> runAsync<T>(
     Future<T> callback(), {
     Duration additionalTime = const Duration(milliseconds: 1000),
@@ -953,6 +1009,11 @@ class WidgetTester extends WidgetController implements HitTestDispatcher, Ticker
   /// The ancestor's semantic data will include the child's as well as
   /// other nodes that have been merged together.
   ///
+  /// If the [SemanticsNode] of the object identified by the finder is
+  /// force-merged into an ancestor (e.g. via the [MergeSemantics] widget)
+  /// the node into which it is merged is returned. That node will include
+  /// all the semantics information of the nodes merged into it.
+  ///
   /// Will throw a [StateError] if the finder returns more than one element or
   /// if no semantics are found or are not enabled.
   SemanticsNode getSemantics(Finder finder) {
@@ -968,7 +1029,7 @@ class WidgetTester extends WidgetController implements HitTestDispatcher, Ticker
     final Element element = candidates.single;
     RenderObject renderObject = element.findRenderObject();
     SemanticsNode result = renderObject.debugSemantics;
-    while (renderObject != null && result == null) {
+    while (renderObject != null && (result == null || result.isMergedIntoParent)) {
       renderObject = renderObject?.parent as RenderObject;
       result = renderObject?.debugSemantics;
     }

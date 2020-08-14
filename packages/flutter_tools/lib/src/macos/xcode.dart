@@ -5,14 +5,15 @@
 import 'dart:async';
 
 import 'package:meta/meta.dart';
-import 'package:platform/platform.dart';
 import 'package:process/process.dart';
+import 'package:vm_service/vm_service_io.dart' as vm_service_io;
 
 import '../artifacts.dart';
 import '../base/common.dart';
 import '../base/file_system.dart';
 import '../base/io.dart';
 import '../base/logger.dart';
+import '../base/platform.dart';
 import '../base/process.dart';
 import '../build_info.dart';
 import '../cache.dart';
@@ -325,8 +326,14 @@ class XCDevice {
   }
 
   // Attach: d83d5bc53967baa0ee18626ba87b6254b2ab5418
+<<<<<<< HEAD
   // Detach: d83d5bc53967baa0ee18626ba87b6254b2ab5418
   final RegExp _observationIdentifierPattern = RegExp(r'^(\w*): (\w*)$');
+=======
+  // Attach: 00008027-00192736010F802E
+  // Detach: d83d5bc53967baa0ee18626ba87b6254b2ab5418
+  final RegExp _observationIdentifierPattern = RegExp(r'^(\w*): ([\w-]*)$');
+>>>>>>> bbfbf1770cca2da7c82e887e4e4af910034800b6
 
   Future<void> _startObservingTetheredIOSDevices() async {
     try {
@@ -358,6 +365,10 @@ class XCDevice {
         //
         // Listening for all devices, on both interfaces.
         // Attach: d83d5bc53967baa0ee18626ba87b6254b2ab5418
+<<<<<<< HEAD
+=======
+        // Attach: 00008027-00192736010F802E
+>>>>>>> bbfbf1770cca2da7c82e887e4e4af910034800b6
         // Detach: d83d5bc53967baa0ee18626ba87b6254b2ab5418
         // Attach: d83d5bc53967baa0ee18626ba87b6254b2ab5418
         final RegExpMatch match = _observationIdentifierPattern.firstMatch(line);
@@ -407,7 +418,7 @@ class XCDevice {
   }
 
   /// [timeout] defaults to 2 seconds.
-  Future<List<IOSDevice>> getAvailableTetheredIOSDevices({ Duration timeout }) async {
+  Future<List<IOSDevice>> getAvailableIOSDevices({ Duration timeout }) async {
     final List<dynamic> allAvailableDevices = await _getAllDevices(timeout: timeout ?? const Duration(seconds: 2));
 
     if (allAvailableDevices == null) {
@@ -481,8 +492,11 @@ class XCDevice {
         }
       }
 
+      final IOSDeviceInterface interface = _interfaceType(deviceProperties);
+
       // Only support USB devices, skip "network" interface (Xcode > Window > Devices and Simulators > Connect via network).
-      if (!_isUSBTethered(deviceProperties)) {
+      // TODO(jmagman): Remove this check once wirelessly detected devices can be observed and attached, https://github.com/flutter/flutter/issues/15072.
+      if (interface != IOSDeviceInterface.usb) {
         continue;
       }
 
@@ -490,6 +504,7 @@ class XCDevice {
         device['identifier'] as String,
         name: device['name'] as String,
         cpuArchitecture: _cpuArchitecture(deviceProperties),
+        interfaceType: interface,
         sdkVersion: _sdkVersion(deviceProperties),
         artifacts: globals.artifacts,
         fileSystem: globals.fs,
@@ -497,6 +512,7 @@ class XCDevice {
         iosDeploy: _iosDeploy,
         iMobileDevice: _iMobileDevice,
         platform: globals.platform,
+        vmServiceConnectUri: vm_service_io.vmServiceConnectUri,
       ));
     }
     return devices;
@@ -526,10 +542,18 @@ class XCDevice {
     return null;
   }
 
-  static bool _isUSBTethered(Map<String, dynamic> deviceProperties) {
-    // Interface can be "usb", "network", or not present for simulators.
-    return deviceProperties.containsKey('interface') &&
-        (deviceProperties['interface'] as String).toLowerCase() == 'usb';
+  static IOSDeviceInterface _interfaceType(Map<String, dynamic> deviceProperties) {
+    // Interface can be "usb", "network", or "none" for simulators
+    // and unknown future interfaces.
+    if (deviceProperties.containsKey('interface')) {
+      if ((deviceProperties['interface'] as String).toLowerCase() == 'network') {
+        return IOSDeviceInterface.network;
+      } else {
+        return IOSDeviceInterface.usb;
+      }
+    }
+
+    return IOSDeviceInterface.none;
   }
 
   static String _sdkVersion(Map<String, dynamic> deviceProperties) {
@@ -552,8 +576,13 @@ class XCDevice {
       } on Exception {
         // Fallback to default iOS architecture. Future-proof against a
         // theoretical version of Xcode that changes this string to something
-        // slightly different like "ARM64".
-        cpuArchitecture ??= defaultIOSArchs.first;
+        // slightly different like "ARM64", or armv7 variations like
+        // armv7s and armv7f.
+        if (architecture.startsWith('armv7')) {
+          cpuArchitecture = DarwinArch.armv7;
+        } else {
+          cpuArchitecture = defaultIOSArchs.first;
+        }
         _logger.printError(
           'Unknown architecture $architecture, defaulting to '
           '${getNameForDarwinArch(cpuArchitecture)}',

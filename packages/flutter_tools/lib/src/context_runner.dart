@@ -17,7 +17,6 @@ import 'base/io.dart';
 import 'base/logger.dart';
 import 'base/os.dart';
 import 'base/process.dart';
-import 'base/signals.dart';
 import 'base/time.dart';
 import 'base/user_messages.dart';
 import 'build_system/build_system.dart';
@@ -45,7 +44,6 @@ import 'persistent_tool_state.dart';
 import 'reporting/reporting.dart';
 import 'run_hot.dart';
 import 'version.dart';
-import 'web/chrome.dart';
 import 'web/workflow.dart';
 import 'windows/visual_studio.dart';
 import 'windows/visual_studio_validator.dart';
@@ -81,7 +79,9 @@ Future<T> runInContext<T>(
         processManager: globals.processManager,
         userMessages: globals.userMessages,
       ),
-      AndroidWorkflow: () => AndroidWorkflow(),
+      AndroidWorkflow: () => AndroidWorkflow(
+        androidSdk: globals.androidSdk,
+      ),
       ApplicationPackageFactory: () => ApplicationPackageFactory(),
       Artifacts: () => CachedArtifacts(
         fileSystem: globals.fs,
@@ -89,7 +89,7 @@ Future<T> runInContext<T>(
         platform: globals.platform,
       ),
       AssetBundleFactory: () => AssetBundleFactory.defaultInstance,
-      BuildSystem: () => BuildSystem(
+      BuildSystem: () => FlutterBuildSystem(
         fileSystem: globals.fs,
         logger: globals.logger,
         platform: globals.platform,
@@ -97,13 +97,6 @@ Future<T> runInContext<T>(
       Cache: () => Cache(
         fileSystem: globals.fs,
         logger: globals.logger,
-        platform: globals.platform,
-      ),
-      ChromeLauncher: () => ChromeLauncher(
-        fileSystem: globals.fs,
-        processManager: globals.processManager,
-        logger: globals.logger,
-        operatingSystemUtils: globals.os,
         platform: globals.platform,
       ),
       CocoaPods: () => CocoaPods(
@@ -124,11 +117,23 @@ Future<T> runInContext<T>(
         logger: globals.logger,
         platform: globals.platform,
       ),
+      CrashReporter: () => CrashReporter(
+        fileSystem: globals.fs,
+        logger: globals.logger,
+        flutterProjectFactory: globals.projectFactory,
+        client: globals.httpClientFactory?.call() ?? HttpClient(),
+      ),
       DevFSConfig: () => DevFSConfig(),
       DeviceManager: () => DeviceManager(),
-      Doctor: () => const Doctor(),
+      Doctor: () => Doctor(logger: globals.logger),
       DoctorValidatorsProvider: () => DoctorValidatorsProvider.defaultInstance,
-      EmulatorManager: () => EmulatorManager(),
+      EmulatorManager: () => EmulatorManager(
+        androidSdk: globals.androidSdk,
+        processManager: globals.processManager,
+        logger: globals.logger,
+        fileSystem: globals.fs,
+        androidWorkflow: androidWorkflow,
+      ),
       FeatureFlags: () => const FeatureFlags(),
       FlutterVersion: () => FlutterVersion(const SystemClock()),
       FuchsiaArtifacts: () => FuchsiaArtifacts.find(),
@@ -143,7 +148,12 @@ Future<T> runInContext<T>(
         xcode: globals.xcode,
       ),
       IOSWorkflow: () => const IOSWorkflow(),
-      KernelCompilerFactory: () => const KernelCompilerFactory(),
+      KernelCompilerFactory: () => KernelCompilerFactory(
+        logger: globals.logger,
+        processManager: globals.processManager,
+        artifacts: globals.artifacts,
+        fileSystem: globals.fs,
+      ),
       Logger: () => globals.platform.isWindows
         ? WindowsStdoutLogger(
             terminal: globals.terminal,
@@ -175,9 +185,15 @@ Future<T> runInContext<T>(
         processManager: globals.processManager,
         logger: globals.logger,
       ),
-      Pub: () => const Pub(),
+      Pub: () => Pub(
+        fileSystem: globals.fs,
+        logger: globals.logger,
+        processManager: globals.processManager,
+        botDetector: globals.botDetector,
+        platform: globals.platform,
+        usage: globals.flutterUsage,
+      ),
       ShutdownHooks: () => ShutdownHooks(logger: globals.logger),
-      Signals: () => Signals(),
       Stdio: () => Stdio(),
       SystemClock: () => const SystemClock(),
       TimeoutConfiguration: () => const TimeoutConfiguration(),
@@ -220,6 +236,7 @@ Future<T> runInContext<T>(
         platform: globals.platform,
         fileSystem: globals.fs,
         terminal: globals.terminal,
+        usage: globals.flutterUsage,
       ),
     },
   );

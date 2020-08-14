@@ -6,17 +6,16 @@ import 'dart:async';
 
 import 'package:args/args.dart';
 import 'package:meta/meta.dart';
-import 'package:platform/platform.dart';
 import 'package:process/process.dart';
 
+import '../artifacts.dart';
 import '../base/common.dart';
 import '../base/file_system.dart';
 import '../base/logger.dart';
+import '../base/platform.dart';
 import '../base/terminal.dart';
 import '../base/utils.dart';
-import '../cache.dart';
 import '../dart/analysis.dart';
-import '../dart/sdk.dart' as sdk;
 import 'analyze.dart';
 import 'analyze_base.dart';
 
@@ -30,7 +29,9 @@ class AnalyzeOnce extends AnalyzeBase {
     @required Logger logger,
     @required Platform platform,
     @required ProcessManager processManager,
-    @required AnsiTerminal terminal,
+    @required Terminal terminal,
+    @required List<String> experiments,
+    @required Artifacts artifacts,
     this.workingDirectory,
   }) : super(
         argResults,
@@ -41,6 +42,8 @@ class AnalyzeOnce extends AnalyzeBase {
         platform: platform,
         processManager: processManager,
         terminal: terminal,
+        experiments: experiments,
+        artifacts: artifacts,
       );
 
   /// The working directory for testing analysis using dartanalyzer.
@@ -52,7 +55,7 @@ class AnalyzeOnce extends AnalyzeBase {
         (workingDirectory ?? fileSystem.currentDirectory).path;
 
     // find directories from argResults.rest
-    final Set<String> directories = Set<String>.from(argResults.rest
+    final Set<String> directories = Set<String>.of(argResults.rest
         .map<String>((String path) => fileSystem.path.canonicalize(path)));
     if (directories.isNotEmpty) {
       for (final String directory in directories) {
@@ -88,7 +91,8 @@ class AnalyzeOnce extends AnalyzeBase {
     final Completer<void> analysisCompleter = Completer<void>();
     final List<AnalysisError> errors = <AnalysisError>[];
 
-    final String sdkPath = argResults['dart-sdk'] as String ?? sdk.dartSdkPath;
+    final String sdkPath = argResults['dart-sdk'] as String ??
+      artifacts.getArtifactPath(Artifact.engineDartSdkPath);
 
     final AnalysisServer server = AnalysisServer(
       sdkPath,
@@ -98,43 +102,51 @@ class AnalyzeOnce extends AnalyzeBase {
       logger: logger,
       processManager: processManager,
       terminal: terminal,
+      experiments: experiments,
     );
 
-    StreamSubscription<bool> subscription;
-    subscription = server.onAnalyzing.listen((bool isAnalyzing) {
-      if (!isAnalyzing) {
-        analysisCompleter.complete();
-        subscription?.cancel();
-        subscription = null;
-      }
-    });
-    server.onErrors.listen((FileAnalysisErrors fileErrors) {
-      // Record the issues found (but filter out to do comments).
-      errors.addAll(fileErrors.errors.where((AnalysisError error) => error.type != 'TODO'));
-    });
+    Stopwatch timer;
+    Status progress;
+    try {
+      StreamSubscription<bool> subscription;
+      subscription = server.onAnalyzing.listen((bool isAnalyzing) {
+        if (!isAnalyzing) {
+          analysisCompleter.complete();
+          subscription?.cancel();
+          subscription = null;
+        }
+      });
+      server.onErrors.listen((FileAnalysisErrors fileErrors) {
+        // Record the issues found (but filter out to do comments).
+        errors.addAll(fileErrors.errors.where((AnalysisError error) => error.type != 'TODO'));
+      });
 
-    await server.start();
-    // Completing the future in the callback can't fail.
-    unawaited(server.onExit.then<void>((int exitCode) {
-      if (!analysisCompleter.isCompleted) {
-        analysisCompleter.completeError('analysis server exited: $exitCode');
-      }
-    }));
+      await server.start();
+      // Completing the future in the callback can't fail.
+      unawaited(server.onExit.then<void>((int exitCode) {
+        if (!analysisCompleter.isCompleted) {
+          analysisCompleter.completeError('analysis server exited: $exitCode');
+        }
+      }));
 
-    Cache.releaseLockEarly();
+      // collect results
+      timer = Stopwatch()..start();
+      final String message = directories.length > 1
+          ? '${directories.length} ${directories.length == 1 ? 'directory' : 'directories'}'
+          : fileSystem.path.basename(directories.first);
+      progress = argResults['preamble'] as bool
+          ? logger.startProgress(
+            'Analyzing $message...',
+            timeout: timeoutConfiguration.slowOperation,
+          )
+          : null;
 
-    // collect results
-    final Stopwatch timer = Stopwatch()..start();
-    final String message = directories.length > 1
-        ? '${directories.length} ${directories.length == 1 ? 'directory' : 'directories'}'
-        : fileSystem.path.basename(directories.first);
-    final Status progress = argResults['preamble'] as bool
-        ? logger.startProgress('Analyzing $message...', timeout: timeoutConfiguration.slowOperation)
-        : null;
-
-    await analysisCompleter.future;
-    progress?.cancel();
-    timer.stop();
+      await analysisCompleter.future;
+    } finally {
+      await server.dispose();
+      progress?.cancel();
+      timer?.stop();
+    }
 
     // count missing dartdocs
     final int undocumentedMembers = errors.where((AnalysisError error) {

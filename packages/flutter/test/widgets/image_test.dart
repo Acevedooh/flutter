@@ -2,7 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -1330,6 +1333,73 @@ void main() {
     expect(tester.binding.hasScheduledFrame, isFalse);
   }, skip: isBrowser);
 
+  testWidgets('Verify Image resets its ImageListeners', (WidgetTester tester) async {
+    final GlobalKey key = GlobalKey();
+    final TestImageStreamCompleter imageStreamCompleter = TestImageStreamCompleter();
+    final TestImageProvider imageProvider1 = TestImageProvider(streamCompleter: imageStreamCompleter);
+    await tester.pumpWidget(
+      Container(
+        key: key,
+        child: Image(
+          image: imageProvider1,
+        ),
+      ),
+    );
+    // listener from resolveStreamForKey is always added.
+    expect(imageStreamCompleter.listeners.length, 2);
+
+
+    final TestImageProvider imageProvider2 = TestImageProvider();
+    await tester.pumpWidget(
+      Container(
+        key: key,
+        child: Image(
+          image: imageProvider2,
+          excludeFromSemantics: true,
+        ),
+      ),
+      null,
+      EnginePhase.layout,
+    );
+
+    // only listener from resolveStreamForKey is left.
+    expect(imageStreamCompleter.listeners.length, 1);
+  });
+
+  testWidgets('Verify Image resets its ErrorListeners', (WidgetTester tester) async {
+    final GlobalKey key = GlobalKey();
+    final TestImageStreamCompleter imageStreamCompleter = TestImageStreamCompleter();
+    final TestImageProvider imageProvider1 = TestImageProvider(streamCompleter: imageStreamCompleter);
+    await tester.pumpWidget(
+      Container(
+        key: key,
+        child: Image(
+          image: imageProvider1,
+          errorBuilder: (_,__,___) => Container(),
+        ),
+      ),
+    );
+    // listener from resolveStreamForKey is always added.
+    expect(imageStreamCompleter.listeners.length, 2);
+
+
+    final TestImageProvider imageProvider2 = TestImageProvider();
+    await tester.pumpWidget(
+      Container(
+        key: key,
+        child: Image(
+          image: imageProvider2,
+          excludeFromSemantics: true,
+        ),
+      ),
+      null,
+      EnginePhase.layout,
+    );
+
+    // only listener from resolveStreamForKey is left.
+    expect(imageStreamCompleter.listeners.length, 1);
+  });
+
   testWidgets('Image defers loading while fast scrolling', (WidgetTester tester) async {
     const int gridCells = 1000;
     final List<TestImageProvider> imageProviders = <TestImageProvider>[];
@@ -1485,7 +1555,7 @@ void main() {
     expect(provider.loadCallCount, 1);
   });
 
-  testWidgets('precacheImage allows time to take over weak refernce', (WidgetTester tester) async {
+  testWidgets('precacheImage allows time to take over weak reference', (WidgetTester tester) async {
     final TestImageProvider provider = TestImageProvider();
     Future<void> precache;
     await tester.pumpWidget(
@@ -1620,8 +1690,107 @@ void main() {
 
     expect(tester.takeException(), 'threw');
   });
+
+  Future<void> _testRotatedImage(WidgetTester tester, bool isAntiAlias) async {
+    final Key key = UniqueKey();
+    await tester.pumpWidget(RepaintBoundary(
+      key: key,
+      child: Transform.rotate(
+        angle: math.pi / 180,
+        child: Image.memory(Uint8List.fromList(kBlueRectPng), isAntiAlias: isAntiAlias),
+      ),
+    ));
+
+    // precacheImage is needed, or the image in the golden file will be empty.
+    if (!kIsWeb) {
+      final Finder allImages = find.byType(Image);
+      for (final Element e in allImages.evaluate()) {
+        await tester.runAsync(() async {
+          final Image image = e.widget as Image;
+          await precacheImage(image.image, e);
+        });
+      }
+      await tester.pumpAndSettle();
+    }
+
+    await expectLater(
+      find.byKey(key),
+      matchesGoldenFile('rotated_image_${isAntiAlias ? 'aa' : 'noaa'}.png'),
+    );
+  }
+
+  testWidgets(
+    'Rotated images',
+    (WidgetTester tester) async {
+      await _testRotatedImage(tester, true);
+      await _testRotatedImage(tester, false);
+    },
+    // TODO(hterkelson): figure out why web timed out with `await precacheImage`
+    // so we can enable this test on web.
+    //
+    // See https://github.com/flutter/flutter/issues/54292.
+    skip: kIsWeb,
+  );
+
+  testWidgets('Reports image size when painted', (WidgetTester tester) async {
+    ImageSizeInfo imageSizeInfo;
+    int count = 0;
+    debugOnPaintImage = (ImageSizeInfo info) {
+      count += 1;
+      imageSizeInfo = info;
+    };
+
+    final ui.Image image = await tester.runAsync(() => createTestImage(kBlueRectPng));
+    final TestImageStreamCompleter streamCompleter = TestImageStreamCompleter(
+      ImageInfo(
+        image: image,
+        scale: 1.0,
+        debugLabel: 'test.png',
+      ),
+    );
+    final TestImageProvider imageProvider = TestImageProvider(streamCompleter: streamCompleter);
+
+    await tester.pumpWidget(
+      Center(
+        child: SizedBox(
+          height: 50,
+          width: 50,
+          child: Image(image: imageProvider),
+        ),
+      ),
+    );
+
+    expect(count, 1);
+    expect(
+      imageSizeInfo,
+      const ImageSizeInfo(
+        source: 'test.png',
+        imageSize: Size(100, 100),
+        displaySize: Size(50, 50),
+      ),
+    );
+
+    debugOnPaintImage = null;
+  });
 }
 
+class ImagePainter extends CustomPainter {
+  ImagePainter(this.image);
+
+  @override
+  void paint(ui.Canvas canvas, ui.Size size) {
+    canvas.drawImage(image, Offset.zero, Paint());
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) {
+    return false;
+  }
+
+  final ui.Image image;
+}
+
+@immutable
 class ConfigurationAwareKey {
   const ConfigurationAwareKey(this.provider, this.configuration)
     : assert(provider != null),

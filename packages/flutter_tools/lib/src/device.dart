@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:meta/meta.dart';
+import 'package:vm_service/vm_service.dart' as vm_service;
 
 import 'android/android_device_discovery.dart';
 import 'android/android_workflow.dart';
@@ -14,10 +15,13 @@ import 'artifacts.dart';
 import 'base/context.dart';
 import 'base/file_system.dart';
 import 'base/io.dart';
+import 'base/user_messages.dart';
 import 'base/utils.dart';
 import 'build_info.dart';
 import 'features.dart';
 import 'fuchsia/fuchsia_device.dart';
+import 'fuchsia/fuchsia_sdk.dart';
+import 'fuchsia/fuchsia_workflow.dart';
 import 'globals.dart' as globals;
 import 'ios/devices.dart';
 import 'ios/simulators.dart';
@@ -25,7 +29,6 @@ import 'linux/linux_device.dart';
 import 'macos/macos_device.dart';
 import 'project.dart';
 import 'tester/flutter_tester.dart';
-import 'vmservice.dart';
 import 'web/web_device.dart';
 import 'windows/windows_device.dart';
 
@@ -83,7 +86,12 @@ class DeviceManager {
       logger: globals.logger,
     ),
     IOSSimulators(iosSimulatorUtils: globals.iosSimulatorUtils),
-    FuchsiaDevices(),
+    FuchsiaDevices(
+      fuchsiaSdk: fuchsiaSdk,
+      logger: globals.logger,
+      fuchsiaWorkflow: fuchsiaWorkflow,
+      platform: globals.platform,
+    ),
     FlutterTesterDevices(),
     MacOSDevices(),
     LinuxDevices(
@@ -91,7 +99,13 @@ class DeviceManager {
       featureFlags: featureFlags,
     ),
     WindowsDevices(),
-    WebDevices(),
+    WebDevices(
+      featureFlags: featureFlags,
+      fileSystem: globals.fs,
+      platform: globals.platform,
+      processManager: globals.processManager,
+      logger: globals.logger,
+    ),
   ]);
 
   String _specifiedDeviceId;
@@ -228,18 +242,57 @@ class DeviceManager {
 
     // If there are still multiple devices and the user did not specify to run
     // all, then attempt to prioritize ephemeral devices. For example, if the
-    // use only typed 'flutter run' and both an Android device and desktop
+    // user only typed 'flutter run' and both an Android device and desktop
     // device are availible, choose the Android device.
     if (devices.length > 1 && !hasSpecifiedAllDevices) {
       // Note: ephemeral is nullable for device types where this is not well
       // defined.
       if (devices.any((Device device) => device.ephemeral == true)) {
-        devices = devices
+        // if there is only one ephemeral device, get it
+        final List<Device> ephemeralDevices = devices
             .where((Device device) => device.ephemeral == true)
             .toList();
+
+            if (ephemeralDevices.length == 1){
+              devices = ephemeralDevices;
+            }
+      }
+      // If it was not able to prioritize a device. For example, if the user
+      // has two active Android devices running, then we request the user to
+      // choose one. If the user has two nonEphemeral devices running, we also
+      // request input to choose one.
+      if (devices.length > 1 && globals.stdio.stdinHasTerminal) {
+        globals.printStatus(globals.userMessages.flutterMultipleDevicesFound);
+        await Device.printDevices(devices);
+        final Device chosenDevice = await _chooseOneOfAvailableDevices(devices);
+        deviceManager.specifiedDeviceId = chosenDevice.id;
+        devices = <Device>[chosenDevice];
       }
     }
     return devices;
+  }
+
+  Future<Device> _chooseOneOfAvailableDevices(List<Device> devices) async {
+    _displayDeviceOptions(devices);
+    final String userInput =  await _readUserInput(devices.length);
+    return devices[int.parse(userInput)];
+  }
+
+  void _displayDeviceOptions(List<Device> devices) {
+    int count = 0;
+    for (final Device device in devices) {
+      globals.printStatus(userMessages.flutterChooseDevice(count, device.name, device.id));
+      count++;
+    }
+  }
+
+  Future<String> _readUserInput(int deviceCount) async {
+    globals.terminal.usesTerminalUi = true;
+    final String result = await globals.terminal.promptForCharInput(
+        <String>[ for (int i = 0; i < deviceCount; i++) '$i' ],
+        logger: globals.logger,
+        prompt: userMessages.flutterChooseOne);
+    return result;
   }
 
   /// Returns whether the device is supported for the project.
@@ -290,19 +343,29 @@ abstract class PollingDeviceDiscovery extends DeviceDiscovery {
   Future<void> startPolling() async {
     if (_timer == null) {
       deviceNotifier ??= ItemListNotifier<Device>();
+<<<<<<< HEAD
       _timer = _initTimer();
+=======
+      // Make initial population the default, fast polling timeout.
+      _timer = _initTimer(null);
+>>>>>>> bbfbf1770cca2da7c82e887e4e4af910034800b6
     }
   }
 
-  Timer _initTimer() {
+  Timer _initTimer(Duration pollingTimeout) {
     return Timer(_pollingInterval, () async {
       try {
+<<<<<<< HEAD
         final List<Device> devices = await pollingGetDevices(timeout: _pollingTimeout);
+=======
+        final List<Device> devices = await pollingGetDevices(timeout: pollingTimeout);
+>>>>>>> bbfbf1770cca2da7c82e887e4e4af910034800b6
         deviceNotifier.updateWithNewList(devices);
       } on TimeoutException {
         globals.printTrace('Device poll timed out. Will retry.');
       }
-      _timer = _initTimer();
+      // Subsequent timeouts after initial population should wait longer.
+      _timer = _initTimer(_pollingTimeout);
     });
   }
 
@@ -337,14 +400,22 @@ abstract class PollingDeviceDiscovery extends DeviceDiscovery {
     return deviceNotifier.onRemoved;
   }
 
-  void dispose() => stopPolling();
+  Future<void> dispose() async => await stopPolling();
 
   @override
   String toString() => '$name device discovery';
 }
 
+/// A device is a physical hardware that can run a flutter application.
+///
+/// This may correspond to a connected iOS or Android device, or represent
+/// the host operating system in the case of Flutter Desktop.
 abstract class Device {
-  Device(this.id, {@required this.category, @required this.platformType, @required this.ephemeral});
+  Device(this.id, {
+    @required this.category,
+    @required this.platformType,
+    @required this.ephemeral,
+  });
 
   final String id;
 
@@ -362,6 +433,9 @@ abstract class Device {
   bool get supportsStartPaused => true;
 
   /// Whether it is an emulated device running on localhost.
+  ///
+  /// This may return `true` for certain physical Android devices, and is
+  /// generally only a best effort guess.
   Future<bool> get isLocalEmulator;
 
   /// The unique identifier for the emulator that corresponds to this device, or
@@ -372,40 +446,48 @@ abstract class Device {
   /// will be returned.
   Future<String> get emulatorId;
 
+  /// Whether this device can run the provided [buildMode].
+  ///
+  /// For example, some emulator architectures cannot run profile or
+  /// release builds.
+  FutureOr<bool> supportsRuntimeMode(BuildMode buildMode) => true;
+
   /// Whether the device is a simulator on a platform which supports hardware rendering.
+  // This is soft-deprecated since the logic is not correct expect for iOS simulators.
   Future<bool> get supportsHardwareRendering async {
-    assert(await isLocalEmulator);
-    switch (await targetPlatform) {
-      case TargetPlatform.android_arm:
-      case TargetPlatform.android_arm64:
-      case TargetPlatform.android_x64:
-      case TargetPlatform.android_x86:
-        return true;
-      case TargetPlatform.ios:
-      case TargetPlatform.darwin_x64:
-      case TargetPlatform.linux_x64:
-      case TargetPlatform.windows_x64:
-      case TargetPlatform.fuchsia_arm64:
-      case TargetPlatform.fuchsia_x64:
-      default:
-        return false;
-    }
+    return true;
   }
 
   /// Whether the device is supported for the current project directory.
   bool isSupportedForProject(FlutterProject flutterProject);
 
-  /// Check if a version of the given app is already installed
-  Future<bool> isAppInstalled(covariant ApplicationPackage app);
+  /// Check if a version of the given app is already installed.
+  ///
+  /// Specify [userIdentifier] to check if installed for a particular user (Android only).
+  Future<bool> isAppInstalled(
+    covariant ApplicationPackage app, {
+    String userIdentifier,
+  });
 
   /// Check if the latest build of the [app] is already installed.
   Future<bool> isLatestBuildInstalled(covariant ApplicationPackage app);
 
-  /// Install an app package on the current device
-  Future<bool> installApp(covariant ApplicationPackage app);
+  /// Install an app package on the current device.
+  ///
+  /// Specify [userIdentifier] to install for a particular user (Android only).
+  Future<bool> installApp(
+    covariant ApplicationPackage app, {
+    String userIdentifier,
+  });
 
-  /// Uninstall an app package from the current device
-  Future<bool> uninstallApp(covariant ApplicationPackage app);
+  /// Uninstall an app package from the current device.
+  ///
+  /// Specify [userIdentifier] to uninstall for a particular user,
+  /// defaults to all users (Android only).
+  Future<bool> uninstallApp(
+    covariant ApplicationPackage app, {
+    String userIdentifier,
+  });
 
   /// Check if the device is supported by Flutter
   bool isSupported();
@@ -453,6 +535,7 @@ abstract class Device {
     Map<String, dynamic> platformArgs,
     bool prebuiltApplication = false,
     bool ipv6 = false,
+    String userIdentifier,
   });
 
   /// Whether this device implements support for hot reload.
@@ -473,7 +556,12 @@ abstract class Device {
   bool get supportsFastStart => false;
 
   /// Stop an app package on the current device.
-  Future<bool> stopApp(covariant ApplicationPackage app);
+  ///
+  /// Specify [userIdentifier] to stop app installed to a profile (Android only).
+  Future<bool> stopApp(
+    covariant ApplicationPackage app, {
+    String userIdentifier,
+  });
 
   /// Query the current application memory usage..
   ///
@@ -485,10 +573,14 @@ abstract class Device {
 
   Future<void> takeScreenshot(File outputFile) => Future<void>.error('unimplemented');
 
+  @nonVirtual
   @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
   int get hashCode => id.hashCode;
 
+  @nonVirtual
   @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
   bool operator ==(Object other) {
     if (identical(this, other)) {
       return true;
@@ -515,7 +607,7 @@ abstract class Device {
         supportIndicator += ' ($type)';
       }
       table.add(<String>[
-        device.name,
+        '${device.name} (${device.category})',
         device.id,
         getNameForTargetPlatform(targetPlatform),
         '${await device.sdkNameAndVersion}$supportIndicator',
@@ -537,6 +629,35 @@ abstract class Device {
 
   static Future<void> printDevices(List<Device> devices) async {
     await descriptions(devices).forEach(globals.printStatus);
+  }
+
+  static List<String> devicesPlatformTypes(List<Device> devices) {
+    return devices
+        .map(
+          (Device d) => d.platformType.toString(),
+        ).toSet().toList()..sort();
+  }
+
+  /// Convert the Device object to a JSON representation suitable for serialization.
+  Future<Map<String, Object>> toJson() async {
+    final bool isLocalEmu = await isLocalEmulator;
+    return <String, Object>{
+      'name': name,
+      'id': id,
+      'isSupported': isSupported(),
+      'targetPlatform': getNameForTargetPlatform(await targetPlatform),
+      'emulator': isLocalEmu,
+      'sdk': await sdkNameAndVersion,
+      'capabilities': <String, Object>{
+        'hotReload': supportsHotReload,
+        'hotRestart': supportsHotRestart,
+        'screenshot': supportsScreenshot,
+        'fastStart': supportsFastStart,
+        'flutterExit': supportsFlutterExit,
+        'hardwareRendering': isLocalEmu && await supportsHardwareRendering,
+        'startPaused': supportsStartPaused,
+      }
+    };
   }
 
   /// Clean up resources allocated by device
@@ -573,7 +694,7 @@ class DebuggingOptions {
     this.enableSoftwareRendering = false,
     this.skiaDeterministicRendering = false,
     this.traceSkia = false,
-    this.traceWhitelist,
+    this.traceAllowlist,
     this.traceSystrace = false,
     this.endlessTraceBuffer = false,
     this.dumpSkpOnShaderCompilation = false,
@@ -586,8 +707,10 @@ class DebuggingOptions {
     this.hostname,
     this.port,
     this.webEnableExposeUrl,
+    this.webUseSseForDebugProxy = true,
     this.webRunHeadless = false,
     this.webBrowserDebugPort,
+    this.webEnableExpressionEvaluation = false,
     this.vmserviceOutFile,
     this.fastStart = false,
    }) : debuggingEnabled = true;
@@ -597,10 +720,11 @@ class DebuggingOptions {
       this.port,
       this.hostname,
       this.webEnableExposeUrl,
+      this.webUseSseForDebugProxy = true,
       this.webRunHeadless = false,
       this.webBrowserDebugPort,
       this.cacheSkSL = false,
-      this.traceWhitelist,
+      this.traceAllowlist,
     }) : debuggingEnabled = false,
       useTestFonts = false,
       startPaused = false,
@@ -616,7 +740,8 @@ class DebuggingOptions {
       hostVmServicePort = null,
       deviceVmServicePort = null,
       vmserviceOutFile = null,
-      fastStart = false;
+      fastStart = false,
+      webEnableExpressionEvaluation = false;
 
   final bool debuggingEnabled;
 
@@ -627,7 +752,7 @@ class DebuggingOptions {
   final bool enableSoftwareRendering;
   final bool skiaDeterministicRendering;
   final bool traceSkia;
-  final String traceWhitelist;
+  final String traceAllowlist;
   final bool traceSystrace;
   final bool endlessTraceBuffer;
   final bool dumpSkpOnShaderCompilation;
@@ -641,6 +766,7 @@ class DebuggingOptions {
   final String port;
   final String hostname;
   final bool webEnableExposeUrl;
+  final bool webUseSseForDebugProxy;
 
   /// Whether to run the browser in headless mode.
   ///
@@ -651,6 +777,9 @@ class DebuggingOptions {
 
   /// The port the browser should use for its debugging protocol.
   final int webBrowserDebugPort;
+
+  /// Enable expression evaluation for web target
+  final bool webEnableExpressionEvaluation;
 
   /// A file where the vmservice URL should be written after the application is started.
   final String vmserviceOutFile;
@@ -726,7 +855,7 @@ abstract class DeviceLogReader {
 
   /// Some logs can be obtained from a VM service stream.
   /// Set this after the VM services are connected.
-  VMService connectedVMService;
+  vm_service.VmService connectedVMService;
 
   @override
   String toString() => name;
@@ -756,7 +885,7 @@ class NoOpDeviceLogReader implements DeviceLogReader {
   int appPid;
 
   @override
-  VMService connectedVMService;
+  vm_service.VmService connectedVMService;
 
   @override
   Stream<String> get logLines => const Stream<String>.empty();

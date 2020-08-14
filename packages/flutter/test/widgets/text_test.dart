@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:ui' as ui;
 
 import 'package:flutter_test/flutter_test.dart';
@@ -159,6 +161,70 @@ void main() {
       ),
     );
     expect(tester.takeException(), null);
+  }, skip: isBrowser); // TODO(yjbanov): https://github.com/flutter/flutter/issues/42086
+
+  testWidgets('inline widgets works with textScaleFactor', (WidgetTester tester) async {
+    // Regression test for https://github.com/flutter/flutter/issues/59316
+    final UniqueKey key = UniqueKey();
+    double textScaleFactor = 1.0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          appBar: AppBar(title: const Text('title')),
+          body: Center(
+            child: Text.rich(
+              TextSpan(
+                children: <InlineSpan>[
+                  WidgetSpan(
+                    child: RichText(
+                      text: const TextSpan(text: 'widget should be truncated'),
+                      textDirection: TextDirection.ltr,
+                    ),
+                  ),
+                ],
+              ),
+              key: key,
+              textDirection: TextDirection.ltr,
+              textScaleFactor: textScaleFactor,
+              applyTextScaleFactorToWidgetSpan: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    RenderBox renderText = tester.renderObject(find.byKey(key));
+    final double singleLineHeight = renderText.size.height;
+    // Now, increases the text scale factor by 5 times.
+    textScaleFactor = textScaleFactor * 5;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          appBar: AppBar(title: const Text('title')),
+          body: Center(
+            child: Text.rich(
+              TextSpan(
+                children: <InlineSpan>[
+                  WidgetSpan(
+                    child: RichText(
+                      text: const TextSpan(text: 'widget should be truncated'),
+                      textDirection: TextDirection.ltr,
+                    ),
+                  ),
+                ],
+              ),
+              key: key,
+              textDirection: TextDirection.ltr,
+              textScaleFactor: textScaleFactor,
+              applyTextScaleFactorToWidgetSpan: true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    renderText = tester.renderObject(find.byKey(key));
+    // The RichText in the widget span should wrap into three lines.
+    expect(renderText.size.height, singleLineHeight * textScaleFactor * 3);
   }, skip: isBrowser); // TODO(yjbanov): https://github.com/flutter/flutter/issues/42086
 
   testWidgets('semanticsLabel can override text label', (WidgetTester tester) async {
@@ -798,6 +864,56 @@ void main() {
     final Size textSizeLongestLine = tester.getSize(find.byType(Text));
     expect(textSizeLongestLine.width, equals(630.0));
     expect(textSizeLongestLine.height, equals(fontHeight * 2));
+  }, skip: isBrowser);  // TODO(yjbanov): https://github.com/flutter/flutter/issues/44020
+
+  testWidgets('textWidthBasis with textAlign still obeys parent alignment', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const <Widget>[
+                Text(
+                  'LEFT ALIGNED, PARENT',
+                  textAlign: TextAlign.left,
+                  textWidthBasis: TextWidthBasis.parent,
+                ),
+                Text(
+                  'RIGHT ALIGNED, PARENT',
+                  textAlign: TextAlign.right,
+                  textWidthBasis: TextWidthBasis.parent,
+                ),
+                Text(
+                  'LEFT ALIGNED, LONGEST LINE',
+                  textAlign: TextAlign.left,
+                  textWidthBasis: TextWidthBasis.longestLine,
+                ),
+                Text(
+                  'RIGHT ALIGNED, LONGEST LINE',
+                  textAlign: TextAlign.right,
+                  textWidthBasis: TextWidthBasis.longestLine,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // All Texts have the same horizontal alignment.
+    final double offsetX = tester.getTopLeft(find.text('LEFT ALIGNED, PARENT')).dx;
+    expect(tester.getTopLeft(find.text('RIGHT ALIGNED, PARENT')).dx, equals(offsetX));
+    expect(tester.getTopLeft(find.text('LEFT ALIGNED, LONGEST LINE')).dx, equals(offsetX));
+    expect(tester.getTopLeft(find.text('RIGHT ALIGNED, LONGEST LINE')).dx, equals(offsetX));
+
+    // All Texts are less than or equal to the width of the Column.
+    final double width = tester.getSize(find.byType(Column)).width;
+    expect(tester.getSize(find.text('LEFT ALIGNED, PARENT')).width, lessThan(width));
+    expect(tester.getSize(find.text('RIGHT ALIGNED, PARENT')).width, lessThan(width));
+    expect(tester.getSize(find.text('LEFT ALIGNED, LONGEST LINE')).width, lessThan(width));
+    expect(tester.getSize(find.text('RIGHT ALIGNED, LONGEST LINE')).width, equals(width));
   }, skip: isBrowser);  // TODO(yjbanov): https://github.com/flutter/flutter/issues/44020
 
   testWidgets('Paragraph.getBoxesForRange returns nothing when selection range is zero length', (WidgetTester tester) async {

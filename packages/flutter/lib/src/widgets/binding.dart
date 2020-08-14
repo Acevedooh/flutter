@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:ui' show AppLifecycleState, Locale, AccessibilityFeatures, FrameTiming, TimingsCallback;
@@ -655,30 +657,11 @@ mixin WidgetsBinding on BindingBase, ServicesBinding, SchedulerBinding, GestureB
       observer.didChangeAppLifecycleState(state);
   }
 
-  /// Called when the operating system notifies the application of a memory
-  /// pressure situation.
-  ///
-  /// Notifies all the observers using
-  /// [WidgetsBindingObserver.didHaveMemoryPressure].
-  ///
-  /// This method exposes the `memoryPressure` notification from
-  /// [SystemChannels.system].
+  @override
   void handleMemoryPressure() {
+    super.handleMemoryPressure();
     for (final WidgetsBindingObserver observer in _observers)
       observer.didHaveMemoryPressure();
-  }
-
-  @override
-  Future<void> handleSystemMessage(Object systemMessage) async {
-    await super.handleSystemMessage(systemMessage);
-    final Map<String, dynamic> message = systemMessage as Map<String, dynamic>;
-    final String type = message['type'] as String;
-    switch (type) {
-      case 'memoryPressure':
-        handleMemoryPressure();
-        break;
-    }
-    return;
   }
 
   bool _needToReportFirstFrame = true;
@@ -896,6 +879,9 @@ mixin WidgetsBinding on BindingBase, ServicesBinding, SchedulerBinding, GestureB
     }
     _needToReportFirstFrame = false;
     if (firstFrameCallback != null && !sendFramesToEngine) {
+      // This frame is deferred and not the first frame sent to the engine that
+      // should be reported.
+      _needToReportFirstFrame = true;
       SchedulerBinding.instance.removeTimingsCallback(firstFrameCallback);
     }
   }
@@ -957,6 +943,46 @@ mixin WidgetsBinding on BindingBase, ServicesBinding, SchedulerBinding, GestureB
     if (renderViewElement != null)
       buildOwner.reassemble(renderViewElement);
     return super.performReassemble();
+  }
+
+  /// Computes the locale the current platform would resolve to.
+  ///
+  /// This method is meant to be used as part of a [localeListResolutionCallback].
+  /// Since this method may return null, a Flutter/dart algorithm should still be
+  /// provided as a fallback in case a native resolved locale cannot be determined
+  /// or if the native resolved locale is undesirable.
+  ///
+  /// This method may return a null [Locale] if the platform does not support
+  /// native locale resolution, or if the resolution failed.
+  ///
+  /// The first [supportedLocale] is treated as the default locale and will be returned
+  /// if no better match is found.
+  ///
+  /// Android and iOS are currently supported.
+  ///
+  /// On Android, the algorithm described in
+  /// https://developer.android.com/guide/topics/resources/multilingual-support
+  /// is used to determine the resolved locale. Depending on the android version
+  /// of the device, either the modern (>= API 24) or legacy (< API 24) algorithm
+  /// will be used.
+  ///
+  /// On iOS, the result of `preferredLocalizationsFromArray` method of `NSBundle`
+  /// is returned. See:
+  /// https://developer.apple.com/documentation/foundation/nsbundle/1417249-preferredlocalizationsfromarray?language=objc
+  /// for details on the used method.
+  ///
+  /// iOS treats script code as necessary for a match, so a user preferred locale of
+  /// `zh_Hans_CN` will not resolve to a supported locale of `zh_CN`.
+  ///
+  /// Since implementation may vary by platform and has potential to be heavy,
+  /// it is recommended to cache the results of this method if the value is
+  /// used multiple times.
+  ///
+  /// Second-best (and n-best) matching locales should be obtained by calling this
+  /// method again with the matched locale of the first call omitted from
+  /// [supportedLocales].
+  Locale computePlatformResolvedLocale(List<Locale> supportedLocales) {
+    return window.computePlatformResolvedLocale(supportedLocales);
   }
 }
 
@@ -1185,7 +1211,7 @@ class RenderObjectToWidgetElement<T extends RenderObject> extends RootRenderObje
 /// A concrete binding for applications based on the Widgets framework.
 ///
 /// This is the glue that binds the framework to the Flutter engine.
-class WidgetsFlutterBinding extends BindingBase with GestureBinding, ServicesBinding, SchedulerBinding, PaintingBinding, SemanticsBinding, RendererBinding, WidgetsBinding {
+class WidgetsFlutterBinding extends BindingBase with GestureBinding, SchedulerBinding, ServicesBinding, PaintingBinding, SemanticsBinding, RendererBinding, WidgetsBinding {
 
   /// Returns an instance of the [WidgetsBinding], creating and
   /// initializing it if necessary. If one is created, it will be a

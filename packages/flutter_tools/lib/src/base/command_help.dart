@@ -5,9 +5,9 @@
 import 'dart:math' as math;
 
 import 'package:meta/meta.dart';
-import 'package:platform/platform.dart';
 
 import 'logger.dart';
+import 'platform.dart';
 import 'terminal.dart';
 
 // ignore_for_file: non_constant_identifier_names
@@ -76,6 +76,13 @@ class CommandHelp {
     'debugProfileWidgetBuilds',
   );
 
+  CommandHelpOption _b;
+  CommandHelpOption get b => _b ??= _makeOption(
+    'b',
+    'Toggle the platform brightness setting (dark and light mode).',
+    'debugBrightnessOverride',
+  );
+
   CommandHelpOption _c;
   CommandHelpOption get c => _c ??= _makeOption(
     'c',
@@ -86,6 +93,12 @@ class CommandHelp {
   CommandHelpOption get d => _d ??= _makeOption(
     'd',
     'Detach (terminate "flutter run" but leave application running).',
+  );
+
+  CommandHelpOption _g;
+  CommandHelpOption get g => _g ??= _makeOption(
+    'g',
+    'Run source code generators.'
   );
 
   CommandHelpOption _h;
@@ -140,6 +153,12 @@ class CommandHelp {
     'debugDumpRenderTree',
   );
 
+  CommandHelpOption _v;
+  CommandHelpOption get v => _v ??= _makeOption(
+    'v',
+    'Launch DevTools.',
+  );
+
   CommandHelpOption _w;
   CommandHelpOption get w => _w ??= _makeOption(
     'w',
@@ -157,6 +176,12 @@ class CommandHelp {
   CommandHelpOption get k => _k ??= _makeOption(
     'k',
     'Toggle CanvasKit rendering.',
+  );
+
+  CommandHelpOption _M;
+  CommandHelpOption get M => _M ??= _makeOption(
+    'M',
+    'Write SkSL shaders to a unique file in the project directory.',
   );
 
   CommandHelpOption _makeOption(String key, String description, [

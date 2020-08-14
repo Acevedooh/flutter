@@ -5,6 +5,7 @@
 import 'dart:async';
 
 import 'package:flutter_tools/src/build_info.dart';
+import 'package:flutter_tools/src/compile.dart';
 import 'package:flutter_tools/src/device.dart';
 import 'package:flutter_tools/src/resident_runner.dart';
 import 'package:flutter_tools/src/vmservice.dart';
@@ -27,6 +28,7 @@ void main() {
             trackWidgetCreation: false,
             treeShakeIcons: false,
           ),
+          generator: MockResidentCompiler(),
         ),
       ],
     );
@@ -139,7 +141,9 @@ void main() {
       final MockFlutterDevice mockFlutterDevice = MockFlutterDevice();
       when(mockResidentRunner.isRunningDebug).thenReturn(true);
       when(mockResidentRunner.flutterDevices).thenReturn(<FlutterDevice>[mockFlutterDevice]);
-      when(mockFlutterDevice.views).thenReturn(<FlutterView>[]);
+      when(mockResidentRunner.listFlutterViews()).thenAnswer((Invocation invocation) async {
+        return <FlutterView>[];
+      });
 
       await terminalHandler.processTerminalInput('l');
 
@@ -364,6 +368,13 @@ void main() {
       verifyNever(mockResidentRunner.debugDumpSemanticsTreeInInverseHitTestOrder());
     });
 
+    testUsingContext('v - launchDevTools', () async {
+      when(mockResidentRunner.supportsServiceProtocol).thenReturn(true);
+      await terminalHandler.processTerminalInput('v');
+
+      verify(mockResidentRunner.launchDevTools()).called(1);
+    });
+
     testUsingContext('w,W - debugDumpApp with service protocol', () async {
       await terminalHandler.processTerminalInput('w');
       await terminalHandler.processTerminalInput('W');
@@ -404,12 +415,12 @@ class MockDevice extends Mock implements Device {
 }
 
 class MockResidentRunner extends Mock implements ResidentRunner {}
-
 class MockFlutterDevice extends Mock implements FlutterDevice {}
+class MockResidentCompiler extends Mock implements ResidentCompiler {}
 
 class TestRunner extends ResidentRunner {
   TestRunner(List<FlutterDevice> devices)
-    : super(devices);
+    : super(devices, debuggingOptions: DebuggingOptions.disabled(BuildInfo.debug));
 
   bool hasHelpBeenPrinted = false;
   String receivedCommand;

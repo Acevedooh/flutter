@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -40,13 +42,13 @@ final Map<String, WidgetBuilder> routes = <String, WidgetBuilder>{
     child: ListView(
       key: homeRouteKey,
       children: <Widget>[
-        Container(height: 100.0, width: 100.0),
+        const SizedBox(height: 100.0, width: 100.0),
         Card(child: Hero(
           tag: 'a',
           transitionOnUserGestures: transitionFromUserGestures,
           child: Container(height: 100.0, width: 100.0, key: firstKey),
         )),
-        Container(height: 100.0, width: 100.0),
+        const SizedBox(height: 100.0, width: 100.0),
         FlatButton(
           child: const Text('two'),
           onPressed: () { Navigator.pushNamed(context, '/two'); },
@@ -70,13 +72,13 @@ final Map<String, WidgetBuilder> routes = <String, WidgetBuilder>{
           child: const Text('pop'),
           onPressed: () { Navigator.pop(context); },
         ),
-        Container(height: 150.0, width: 150.0),
+        const SizedBox(height: 150.0, width: 150.0),
         Card(child: Hero(
           tag: 'a',
           transitionOnUserGestures: transitionFromUserGestures,
           child: Container(height: 150.0, width: 150.0, key: secondKey),
         )),
-        Container(height: 150.0, width: 150.0),
+        const SizedBox(height: 150.0, width: 150.0),
         FlatButton(
           child: const Text('three'),
           onPressed: () { Navigator.push(context, ThreeRoute()); },
@@ -96,7 +98,7 @@ final Map<String, WidgetBuilder> routes = <String, WidgetBuilder>{
           child: const Text('pop'),
           onPressed: () { Navigator.pop(context); },
         ),
-        Container(height: 150.0, width: 150.0),
+        const SizedBox(height: 150.0, width: 150.0),
         Card(
           child: Padding(
             padding: const EdgeInsets.only(left: 50.0),
@@ -107,7 +109,7 @@ final Map<String, WidgetBuilder> routes = <String, WidgetBuilder>{
             ),
           ),
         ),
-        Container(height: 150.0, width: 150.0),
+        const SizedBox(height: 150.0, width: 150.0),
         FlatButton(
           child: const Text('three'),
           onPressed: () { Navigator.push(context, ThreeRoute()); },
@@ -137,9 +139,9 @@ class ThreeRoute extends MaterialPageRoute<void> {
           key: routeThreeKey,
           child: ListView(
             children: <Widget>[
-              Container(height: 200.0, width: 200.0),
+              const SizedBox(height: 200.0, width: 200.0),
               Card(child: Hero(tag: 'a', child: Container(height: 200.0, width: 200.0, key: thirdKey))),
-              Container(height: 200.0, width: 200.0),
+              const SizedBox(height: 200.0, width: 200.0),
             ],
           ),
         );
@@ -718,7 +720,7 @@ Future<void> main() async {
                   return Card(
                     child: routeIncludesHero
                       ? Hero(tag: 'H', child: Container(key: routeHeroKey, height: 200.0, width: 200.0))
-                      : Container(height: 200.0, width: 200.0),
+                      : const SizedBox(height: 200.0, width: 200.0),
                   );
                 },
               ),

@@ -2,14 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
 import 'typography.dart';
-
-// Eventually we'll get rid of the deprecated members, but for now, we have to use them
-// in order to implement them.
-// ignore_for_file: deprecated_member_use_from_same_package
 
 /// Material design text theme.
 ///
@@ -32,7 +30,7 @@ import 'typography.dart';
 ///
 /// The Material Design typography scheme was significantly changed in the
 /// current (2018) version of the specification
-/// (https://material.io/design/typography).
+/// ([https://material.io/design/typography](https://material.io/design/typography)).
 ///
 /// The 2018 spec has thirteen text styles:
 /// ```

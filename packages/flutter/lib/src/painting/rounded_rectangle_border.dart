@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:ui' as ui show lerpDouble;
 
 import 'package:flutter/foundation.dart';
@@ -24,18 +26,24 @@ import 'edge_insets.dart';
 ///  * [BorderSide], which is used to describe each side of the box.
 ///  * [Border], which, when used with [BoxDecoration], can also
 ///    describe a rounded rectangle.
-class RoundedRectangleBorder extends ShapeBorder {
+class RoundedRectangleBorder extends OutlinedBorder {
   /// Creates a rounded rectangle border.
   ///
   /// The arguments must not be null.
   const RoundedRectangleBorder({
-    this.side = BorderSide.none,
+    BorderSide side = BorderSide.none,
     this.borderRadius = BorderRadius.zero,
+<<<<<<< HEAD
   })  : assert(side != null),
         assert(borderRadius != null);
 
   /// The style of this border.
   final BorderSide side;
+=======
+  }) : assert(side != null),
+       assert(borderRadius != null),
+       super(side: side);
+>>>>>>> bbfbf1770cca2da7c82e887e4e4af910034800b6
 
   /// The radii for each corner.
   final BorderRadiusGeometry borderRadius;
@@ -93,6 +101,16 @@ class RoundedRectangleBorder extends ShapeBorder {
     return super.lerpTo(b, t);
   }
 
+  /// Returns a copy of this RoundedRectangleBorder with the given fields
+  /// replaced with the new values.
+  @override
+  RoundedRectangleBorder copyWith({ BorderSide side, BorderRadius borderRadius }) {
+    return RoundedRectangleBorder(
+      side: side ?? this.side,
+      borderRadius: borderRadius ?? this.borderRadius,
+    );
+  }
+
   @override
   Path getInnerPath(Rect rect, {TextDirection textDirection}) {
     return Path()
@@ -143,16 +161,23 @@ class RoundedRectangleBorder extends ShapeBorder {
   }
 }
 
-class _RoundedRectangleToCircleBorder extends ShapeBorder {
+class _RoundedRectangleToCircleBorder extends OutlinedBorder {
   const _RoundedRectangleToCircleBorder({
-    this.side = BorderSide.none,
+    BorderSide side = BorderSide.none,
     this.borderRadius = BorderRadius.zero,
     @required this.circleness,
+<<<<<<< HEAD
   })  : assert(side != null),
         assert(borderRadius != null),
         assert(circleness != null);
 
   final BorderSide side;
+=======
+  }) : assert(side != null),
+       assert(borderRadius != null),
+       assert(circleness != null),
+       super(side: side);
+>>>>>>> bbfbf1770cca2da7c82e887e4e4af910034800b6
 
   final BorderRadiusGeometry borderRadius;
 
@@ -273,7 +298,20 @@ class _RoundedRectangleToCircleBorder extends ShapeBorder {
   }
 
   @override
+<<<<<<< HEAD
   void paint(Canvas canvas, Rect rect, {TextDirection textDirection}) {
+=======
+  _RoundedRectangleToCircleBorder copyWith({ BorderSide side, BorderRadius borderRadius, double circleness }) {
+    return _RoundedRectangleToCircleBorder(
+      side: side ?? this.side,
+      borderRadius: borderRadius ?? this.borderRadius,
+      circleness: circleness ?? this.circleness,
+    );
+  }
+
+  @override
+  void paint(Canvas canvas, Rect rect, { TextDirection textDirection }) {
+>>>>>>> bbfbf1770cca2da7c82e887e4e4af910034800b6
     switch (side.style) {
       case BorderStyle.none:
         break;

@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -926,6 +928,49 @@ void main() {
     expect(sharedValue, 0);
   });
 
+<<<<<<< HEAD
+=======
+  testWidgets('Hit-tests report accurate local position in segments', (WidgetTester tester) async {
+    final Map<int, Widget> children = <int, Widget>{};
+    TapDownDetails tapDownDetails;
+    children[0] = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (TapDownDetails details) { tapDownDetails = details; },
+      child: const SizedBox(width: 200, height: 200),
+    );
+    children[1] = const Text('Child 2');
+
+    int sharedValue = 1;
+
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (BuildContext context, StateSetter setState) {
+          return boilerplate(
+            child: CupertinoSegmentedControl<int>(
+              key: const ValueKey<String>('Segmented Control'),
+              children: children,
+              onValueChanged: (int newValue) {
+                setState(() {
+                  sharedValue = newValue;
+                });
+              },
+              groupValue: sharedValue,
+            ),
+          );
+        },
+      ),
+    );
+
+    expect(sharedValue, 1);
+
+    final Offset segment0GlobalOffset = tester.getTopLeft(find.byWidget(children[0]));
+    await tester.tapAt(segment0GlobalOffset + const Offset(7, 11));
+
+    expect(tapDownDetails.localPosition, const Offset(7, 11));
+    expect(tapDownDetails.globalPosition, segment0GlobalOffset + const Offset(7, 11));
+  });
+
+>>>>>>> bbfbf1770cca2da7c82e887e4e4af910034800b6
   testWidgets(
     'Segment still hittable with a child that has no hitbox',
     (WidgetTester tester) async {

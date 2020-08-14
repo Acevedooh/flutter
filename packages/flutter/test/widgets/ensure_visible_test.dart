@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
@@ -384,7 +386,7 @@ void main() {
       Widget buildSliver(int i) {
         return SliverToBoxAdapter(
           key: ValueKey<int>(i),
-          child: Container(width: 200.0, height: 200.0),
+          child: const SizedBox(width: 200.0, height: 200.0),
         );
       }
 

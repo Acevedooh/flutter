@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:ui';
 
 import 'package:flutter/widgets.dart';
@@ -20,6 +22,10 @@ import 'theme_data.dart';
 /// app to navigate between a small number of views, typically between three and
 /// five.
 ///
+/// The navigation rail is meant for layouts with wide viewports, such as a
+/// desktop web or tablet landscape layout. For smaller layouts, like mobile
+/// portrait, a [BottomNavigationBar] should be used instead.
+///
 /// A navigation rail is usually used as the first or last element of a [Row]
 /// which defines the app's [Scaffold] body.
 ///
@@ -27,10 +33,6 @@ import 'theme_data.dart';
 /// specified with [NavigationRailTheme]. The default values for null theme
 /// properties are based on the [Theme]'s [ThemeData.textTheme],
 /// [ThemeData.iconTheme], and [ThemeData.colorScheme].
-//
-/// The navigation rail is meant for layouts with wide viewports, such as a
-/// desktop web or tablet landscape layout. For smaller layouts, like mobile
-/// portrait, a [BottomNavigationBar] should be used instead.
 ///
 /// Adaptive layouts can build different instances of the [Scaffold] in order to
 /// have a navigation rail for more horizontal layouts and a bottom navigation
@@ -118,7 +120,7 @@ class NavigationRail extends StatefulWidget {
   /// true when when the [labelType] is null or [NavigationRailLabelType.none].
   ///
   /// If [backgroundColor], [elevation], [groupAlignment], [labelType],
-  /// [unselectedLabelTextStyle], [unselectedLabelTextStyle],
+  /// [unselectedLabelTextStyle], [selectedLabelTextStyle],
   /// [unselectedIconTheme], or [selectedIconTheme] are null, then their
   /// [NavigationRailThemeData] values will be used. If the corresponding
   /// [NavigationRailThemeData] property is null, then the navigation rail
@@ -164,7 +166,7 @@ class NavigationRail extends StatefulWidget {
   ///
   /// The extended state has a wider rail container, and the labels are
   /// positioned next to the icons. [minExtendedWidth] can be used to set the
-  /// the minimum width of the rail when it is in this state.
+  /// minimum width of the rail when it is in this state.
   ///
   /// The rail will implicitly animate between the extended and normal state.
   ///
@@ -441,20 +443,20 @@ class _NavigationRailState extends State<NavigationRail> with TickerProviderStat
     final double minWidth = widget.minWidth ?? _minRailWidth;
     final double minExtendedWidth = widget.minExtendedWidth ?? _minExtendedRailWidth;
     final Color baseSelectedColor = theme.colorScheme.primary;
-    final Color baseColor = theme.colorScheme.onSurface.withOpacity(0.64);
+    final Color baseUnselectedColor = theme.colorScheme.onSurface.withOpacity(0.64);
     final IconThemeData defaultUnselectedIconTheme = widget.unselectedIconTheme ?? navigationRailTheme.unselectedIconTheme;
     final IconThemeData unselectedIconTheme = IconThemeData(
       size: defaultUnselectedIconTheme?.size ?? 24.0,
       color: defaultUnselectedIconTheme?.color ?? theme.colorScheme.onSurface,
-      opacity: defaultUnselectedIconTheme?.opacity ?? 1.0,
+      opacity: defaultUnselectedIconTheme?.opacity ?? 0.64,
     );
     final IconThemeData defaultSelectedIconTheme = widget.selectedIconTheme ?? navigationRailTheme.selectedIconTheme;
     final IconThemeData selectedIconTheme = IconThemeData(
       size: defaultSelectedIconTheme?.size ?? 24.0,
       color: defaultSelectedIconTheme?.color ?? theme.colorScheme.primary,
-      opacity: defaultSelectedIconTheme?.opacity ?? 0.64,
+      opacity: defaultSelectedIconTheme?.opacity ?? 1.0,
     );
-    final TextStyle unselectedLabelTextStyle = theme.textTheme.bodyText1.copyWith(color: baseColor).merge(widget.unselectedLabelTextStyle ?? navigationRailTheme.unselectedLabelTextStyle);
+    final TextStyle unselectedLabelTextStyle = theme.textTheme.bodyText1.copyWith(color: baseUnselectedColor).merge(widget.unselectedLabelTextStyle ?? navigationRailTheme.unselectedLabelTextStyle);
     final TextStyle selectedLabelTextStyle = theme.textTheme.bodyText1.copyWith(color: baseSelectedColor).merge(widget.selectedLabelTextStyle ?? navigationRailTheme.selectedLabelTextStyle);
     final double groupAlignment = widget.groupAlignment ?? navigationRailTheme.groupAlignment ?? -1.0;
     final NavigationRailLabelType labelType = widget.labelType ?? navigationRailTheme.labelType ?? NavigationRailLabelType.none;

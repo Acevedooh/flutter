@@ -175,6 +175,32 @@ $otherComments  static const LogicalKeyboardKey $constantName = LogicalKeyboardK
     return glfwKeyCodeMap.toString().trimRight();
   }
 
+  /// This generates the map of GTK number pad key codes to logical keys.
+  String get gtkNumpadMap {
+    final StringBuffer gtkNumpadMap = StringBuffer();
+    for (final Key entry in numpadKeyData) {
+      if (entry.gtkKeyCodes != null) {
+        for (final int code in entry.gtkKeyCodes.cast<int>()) {
+          gtkNumpadMap.writeln('  $code: LogicalKeyboardKey.${entry.constantName},');
+        }
+      }
+    }
+    return gtkNumpadMap.toString().trimRight();
+  }
+
+  /// This generates the map of GTK key codes to logical keys.
+  String get gtkKeyCodeMap {
+    final StringBuffer gtkKeyCodeMap = StringBuffer();
+    for (final Key entry in keyData.data) {
+      if (entry.gtkKeyCodes != null) {
+        for (final int code in entry.gtkKeyCodes.cast<int>()) {
+          gtkKeyCodeMap.writeln('  $code: LogicalKeyboardKey.${entry.constantName},');
+        }
+      }
+    }
+    return gtkKeyCodeMap.toString().trimRight();
+  }
+
   /// This generates the map of XKB USB HID codes to physical keys.
   String get xkbScanCodeMap {
     final StringBuffer xkbScanCodeMap = StringBuffer();
@@ -223,6 +249,43 @@ $otherComments  static const LogicalKeyboardKey $constantName = LogicalKeyboardK
       }
     }
     return androidScanCodeMap.toString().trimRight();
+  }
+
+  /// This generates the map of Windows scan codes to physical keys.
+  String get windowsScanCodeMap {
+    final StringBuffer windowsScanCodeMap = StringBuffer();
+    for (final Key entry in keyData.data) {
+      if (entry.windowsScanCode != null) {
+        windowsScanCodeMap.writeln('  ${toHex(entry.windowsScanCode)}: PhysicalKeyboardKey.${entry.constantName},');
+      }
+    }
+    return windowsScanCodeMap.toString().trimRight();
+  }
+
+  /// This generates the map of Windows number pad key codes to logical keys.
+  String get windowsNumpadMap {
+    final StringBuffer windowsNumPadMap = StringBuffer();
+    for (final Key entry in numpadKeyData) {
+      if (entry.windowsKeyCodes != null){
+        for (final int code in entry.windowsKeyCodes) {
+          windowsNumPadMap.writeln('  $code: LogicalKeyboardKey.${entry.constantName},');
+        }
+      }
+    }
+    return windowsNumPadMap.toString().trimRight();
+  }
+
+  /// This generates the map of Windows key codes to logical keys.
+  String get windowsKeyCodeMap {
+    final StringBuffer windowsKeyCodeMap = StringBuffer();
+    for (final Key entry in keyData.data) {
+      if (entry.windowsKeyCodes != null) {
+        for (final int code in entry.windowsKeyCodes) {
+          windowsKeyCodeMap.writeln('  $code: LogicalKeyboardKey.${entry.constantName},');
+        }
+      }
+    }
+    return windowsKeyCodeMap.toString().trimRight();
   }
 
   /// This generates the map of macOS key codes to physical keys.
@@ -377,10 +440,15 @@ $otherComments  static const LogicalKeyboardKey $constantName = LogicalKeyboardK
       'MACOS_FUNCTION_KEY_MAP': macOsFunctionKeyMap,
       'GLFW_KEY_CODE_MAP': glfwKeyCodeMap,
       'GLFW_NUMPAD_MAP': glfwNumpadMap,
+      'GTK_KEY_CODE_MAP': gtkKeyCodeMap,
+      'GTK_NUMPAD_MAP': gtkNumpadMap,
       'XKB_SCAN_CODE_MAP': xkbScanCodeMap,
       'WEB_LOGICAL_KEY_MAP': webLogicalKeyMap,
       'WEB_PHYSICAL_KEY_MAP': webPhysicalKeyMap,
       'WEB_NUMPAD_MAP': webNumpadMap,
+      'WINDOWS_LOGICAL_KEY_MAP': windowsKeyCodeMap,
+      'WINDOWS_PHYSICAL_KEY_MAP': windowsScanCodeMap,
+      'WINDOWS_NUMPAD_MAP': windowsNumpadMap,
     };
 
     final String template = File(path.join(flutterRoot.path, 'dev', 'tools', 'gen_keycodes', 'data', 'keyboard_maps.tmpl')).readAsStringSync();

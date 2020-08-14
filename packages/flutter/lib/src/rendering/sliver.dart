@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -634,7 +636,7 @@ class SliverGeometry with Diagnosticable {
   ///
   /// This value is typically 0 when outside of the viewport and grows or
   /// shrinks from 0 or to 0 as the sliver is being scrolled into and out of the
-  /// viewport unless then sliver wants to achieve a special effect and push
+  /// viewport unless the sliver wants to achieve a special effect and push
   /// down the layout start position of subsequent slivers before the sliver is
   /// even scrolled into the viewport.
   final double layoutExtent;
@@ -859,7 +861,7 @@ class SliverHitTestResult extends HitTestResult {
     assert(crossAxisPosition != null);
     assert(hitTest != null);
     if (paintOffset != null) {
-      pushTransform(Matrix4.translationValues(-paintOffset.dx, -paintOffset.dy, 0));
+      pushOffset(-paintOffset);
     }
     final bool isHit = hitTest(
       this,
